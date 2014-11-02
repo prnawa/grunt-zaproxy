@@ -1,48 +1,38 @@
-'use strict';
+var expect = require('chai').expect;
+var path = require('path');
+var exec = require('child_process').exec;
+var gruntExec = path.resolve('node_modules/grunt-cli/bin/grunt');
+var ZapClient = require('zaproxy');
 
-var grunt = require('grunt');
-
-/*
-  ======== A Handy Little Nodeunit Reference ========
-  https://github.com/caolan/nodeunit
-
-  Test methods:
-    test.expect(numAssertions)
-    test.done()
-  Test assertions:
-    test.ok(value, [message])
-    test.equal(actual, expected, [message])
-    test.notEqual(actual, expected, [message])
-    test.deepEqual(actual, expected, [message])
-    test.notDeepEqual(actual, expected, [message])
-    test.strictEqual(actual, expected, [message])
-    test.notStrictEqual(actual, expected, [message])
-    test.throws(block, [error], [message])
-    test.doesNotThrow(block, [error], [message])
-    test.ifError(value)
-*/
-
-exports.zaproxy = {
-  setUp: function(done) {
-    // setup here if necessary
-    done();
-  },
-  default_options: function(test) {
-    test.expect(1);
-
-    var actual = grunt.file.read('tmp/default_options');
-    var expected = grunt.file.read('test/expected/default_options');
-    test.equal(actual, expected, 'should describe what the default behavior is.');
-
-    test.done();
-  },
-  custom_options: function(test) {
-    test.expect(1);
-
-    var actual = grunt.file.read('tmp/custom_options');
-    var expected = grunt.file.read('test/expected/custom_options');
-    test.equal(actual, expected, 'should describe what the custom option(s) behavior is.');
-
-    test.done();
-  },
+var execScenario = function(scenario, callback) {
+  var scenarioDir = __dirname + '/scenarios/' + scenario;
+  exec(gruntExec, {cwd: scenarioDir}, callback);
 };
+
+describe('zaproxyStart', function() {
+  it('should start proxy', function(done) {
+    execScenario('start', function(error, stdout) {
+      expect(stdout).to.match(/Zaproxy is started/);
+      var options = { proxy: 'http://localhost:8080' };
+      var zaproxy = new ZapClient(options);
+      zaproxy.core.version(function (err) {
+        expect(err).to.be.null;
+        done();
+      });
+    });
+  });
+});
+
+describe('zaproxyStop', function() {
+  it('should stop already running proxy', function(done) {
+    execScenario('stop', function(error, stdout) {
+      expect(stdout).to.match(/Zaproxy is started/);
+      var options = { proxy: 'http://localhost:8081' };
+      var zaproxy = new ZapClient(options);
+      zaproxy.core.version(function (err) {
+        expect(err).not.to.be.null;
+        done();
+      });
+    });
+  });
+});

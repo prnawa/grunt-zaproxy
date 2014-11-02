@@ -6,45 +6,111 @@
  * Licensed under the MIT license.
  */
 
-'use strict';
+var path = require('path');
+var spawn = require('child_process').spawn;
+var Zaproxy = require('zaproxy');
 
 module.exports = function(grunt) {
-
-  // Please see the Grunt documentation for more information regarding task
-  // creation: http://gruntjs.com/creating-tasks
-
-  grunt.registerMultiTask('zaproxy', 'Grunt task for the OWASP Zed Attack Proxy (ZAP)', function() {
+  var description = 'Grunt task for the OWASP Zed Attack Proxy (ZAP)';
+  grunt.registerTask('zaproxyStart', description, function() {
     // Merge task-specific and/or target-specific options with these defaults.
     var options = this.options({
-      punctuation: '.',
-      separator: ', '
+      host: 'localhost',
+      port: '8080',
+      daemon: true,
+      binPath: '/usr/local/zap2.3.1/'
     });
 
-    // Iterate over all specified file groups.
-    this.files.forEach(function(f) {
-      // Concat specified files.
-      var src = f.src.filter(function(filepath) {
-        // Warn on and remove invalid source files (if nonull was set).
-        if (!grunt.file.exists(filepath)) {
-          grunt.log.warn('Source file "' + filepath + '" not found.');
-          return false;
+    var args = ['-daemon', '-host', options.host, '-port', options.port];
+
+    var cmd =   path.join(options.binPath, 'zap.sh');
+
+    var child = spawn(cmd, args);
+
+    child.on('close', function (code) {
+      if (code) {
+        grunt.fail.warn('Error launching ZAProxy: ' + code);
+      }
+    });
+    child.on('error', function (err) {
+      if (err.code === 'ENOENT') {
+        grunt.fail.fatal('Error launching ZAProxy. Make sure that ZAProxy is installed and zap.sh is available on the executable path.');
+      }
+    });
+
+    // Wait until the proxy is responding
+    var done = this.async();
+    var retryCount = 0;
+    var zaproxy = new Zaproxy({ proxy: 'http://' + options.host + ':' + options.port });
+    var wait = function (callback) {
+      zaproxy.core.version(function (err) {
+        if (err) {
+          grunt.log.write('.');
+          retryCount += 1;
+          if (retryCount > 30) {
+            grunt.log.writeln('ZAProxy is taking too long, killing.');
+            child.kill('SIGKILL');
+            done();
+          } else {
+            setTimeout(function () {
+              wait(callback);
+            }, 1000);
+          }
         } else {
-          return true;
+          zaproxy.core.newSession('', false, function () {
+            grunt.log.ok();
+            grunt.log.writeln('Zaproxy is started');
+            done();
+          });
         }
-      }).map(function(filepath) {
-        // Read file source.
-        return grunt.file.read(filepath);
-      }).join(grunt.util.normalizelf(options.separator));
-
-      // Handle options.
-      src += options.punctuation;
-
-      // Write the destination file.
-      grunt.file.write(f.dest, src);
-
-      // Print a success message.
-      grunt.log.writeln('File "' + f.dest + '" created.');
-    });
+      });
+    };
+    wait();
   });
 
+  /**
+   * Stop a running ZAProxy.
+   **/
+  grunt.registerTask('zaproxyStop', 'Stop ZAProxy.', function () {
+    // Set up options.
+    var options = this.options({
+      host: 'localhost',
+      port: '8080'
+    });
+
+    var asyncDone = this.async();
+
+
+    var zaproxy = new Zaproxy({ proxy: 'http://' + options.host + ':' + options.port });
+    grunt.log.write('Stopping ZAProxy: ');
+    zaproxy.core.shutdown(function (err) {
+      if (err) {
+        grunt.log.writeln('ZAProxy does not appear to be running.');
+        asyncDone();
+        return;
+      }
+
+      var retryCount = 0;
+      var wait = function (callback) {
+        zaproxy.core.version(function (err) {
+          if (err) {
+            grunt.log.ok();
+            asyncDone();
+          } else {
+            grunt.log.write('.');
+            retryCount += 1;
+            if (retryCount > 30) {
+              grunt.log.writeln('ZAProxy is taking too long, exiting.');
+              asyncDone();
+            } else {
+              setTimeout(function () {
+                wait(callback);
+              }, 1000);
+            }
+          }
+        });
+      };
+      wait();
+    });
+  });
 };

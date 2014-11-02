@@ -9,5 +9,9 @@
   "undef": true,
   "boss": true,
   "eqnull": true,
-  "node": true
+  "node": true,
+  "unused": true,
+  "mocha": true,
+  "expr": true,
+  "es5": true
 }
