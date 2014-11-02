@@ -22,14 +22,6 @@ module.exports = function(grunt) {
         jshintrc: '.jshintrc'
       }
     },
-
-    // Configuration to be run (and then tested).
-    zaproxy: {
-      start: {
-        options: {
-        }
-      }
-    },
     mochaTest: {
       'spec': {
         options: {
